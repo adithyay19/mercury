@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model VoiceSession {
+  id          String   @id @default(cuid())
+  userId      String
+  guildId     String
+  joinTime    BigInt
+  leaveTime   BigInt?
+  duration    Int?     // seconds
+  createdAt   DateTime @default(now())
+
+  @@index([userId, guildId])
+}
+
+model ActivitySession {
+  id           String   @id @default(cuid())
+  userId       String
+  guildId      String
+  activityName String
+  activityType String
+  startTime    BigInt
+  endTime      BigInt?
+  duration     Int?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, guildId, activityName])
+}
+
+model Total {
+  id           String @id @default(cuid())
+  userId       String
+  guildId      String
+  type         String // "voice" or "activity:GameName"
+  totalSeconds Int    @default(0)
+
+  @@unique([userId, guildId, type])
+}

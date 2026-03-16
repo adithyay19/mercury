@@ -1,5 +1,5 @@
 import { Client, Events, GatewayIntentBits, ActivityType, Presence, VoiceState, TextChannel } from 'discord.js';
-import { TextBasedChannel, NewsChannel, DMChannel, ThreadChannel, PartialGroupDMChannel } from 'discord.js';
+import { NewsChannel, DMChannel, ThreadChannel, PartialGroupDMChannel } from 'discord.js';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import {
@@ -7,8 +7,9 @@ import {
   endVoiceSession,
   startActivitySession,
   endActivitySession,
-  getTotalSeconds
-} from './database';
+  getTotalSeconds,
+  prisma,
+} from "./database";
 
 dotenv.config({ path: path.join(import.meta.dirname, '..', 'secrets.env') });
 
@@ -32,6 +33,7 @@ const lastSeenActivities = new Map<string, string>();
 
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user?.tag}`);
+  await prisma.$connect();
   await sendNotification("Up and running!");
 });
 
@@ -81,8 +83,9 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
     startVoiceSession(TARGET_ID, guildId);
 
     const channelName = newState.channel?.name ?? 'unknown channel';
+    console.log(newState.channel?.name, newState.member.displayName, newState.guild.name);
     await sendNotification(
-      `<@&${NOTIFY_ROLE_ID}> ${user.tag} has **joined** voice channel: **${channelName}**`
+      `${user.tag} has **joined** voice channel: **${channelName}**`
     );
   }
 
@@ -91,19 +94,20 @@ client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceS
     endVoiceSession(TARGET_ID, guildId);
 
     const channelName = oldState.channel?.name ?? 'unknown channel';
+    console.log(oldState.channel?.name, newState.member.displayName, oldState.guild.name);
     await sendNotification(
-      `<@&${NOTIFY_ROLE_ID}> ${user.tag} has **left** voice channel: **${channelName}**`
+      ` ${user.tag} has **left** voice channel: **${channelName}**`
     );
   }
 });
 
 
 client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresence: Presence) => {
-  if (newPresence.userId !== TARGET_ID) return;
   if (!newPresence.guild) return;
-
+  if (!newPresence.user) return;
+  const userId = newPresence.user.id;
   const guildId = newPresence.guild.id;
-  const userTag = newPresence.user?.tag ?? 'Unknown';
+  const userTag = newPresence.user.tag ?? 'Unknown';
 
   // Get a stable signature of current activities (sorted to avoid order differences)
   const currentActivities = (newPresence.activities || [])
@@ -118,7 +122,7 @@ client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresenc
 
   const currentSignature = JSON.stringify(currentActivities);
 
-  const key = `${TARGET_ID}-${guildId}`;
+  const key = `${userId}-${guildId}`;
   const previousSignature = lastSeenActivities.get(key);
 
   // Only process if activities actually changed
@@ -144,7 +148,7 @@ client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresenc
       const name = act.name;
       const typeStr = ActivityType[act.type] ?? 'Custom';
 
-      startActivitySession(TARGET_ID, guildId, name, typeStr);
+      startActivitySession(userId, guildId, name, typeStr);
 
       await sendNotification(
         `${userTag} started **${typeStr} ${name}**`
@@ -164,10 +168,10 @@ client.on(Events.PresenceUpdate, async (oldPresence: Presence | null, newPresenc
       const name = act.name;
       const typeStr = ActivityType[act.type] ?? 'Custom';
 
-      endActivitySession(TARGET_ID, guildId, name);
+      endActivitySession(userId, guildId, name);
 
       await sendNotification(
-        `<@&${NOTIFY_ROLE_ID}> ${userTag} stopped **${typeStr} ${name}**`
+        `${userTag} stopped **${typeStr} ${name}**`
       );
     }
   }
@@ -181,27 +185,20 @@ client.on(Events.MessageCreate, async (message) => {
   const command = args.shift()?.toLowerCase();
 
   if (command === 'stats') {
-    const voiceSec = getTotalSeconds(TARGET_ID, message.guild.id, 'voice');
-    const voiceHours = (voiceSec / 3600).toFixed(1);
-
-    const game = args.join(' ');
-    const key = `activity:${game}`;
-    const sec = getTotalSeconds(TARGET_ID, message.guild.id, key);
-    const hours = (sec / 3600).toFixed(1);
-
+    const voiceSec = getTotalSeconds(message.author.id, message.guild.id, 'voice');
+    const voiceHours = (Number(voiceSec) / 3600).toFixed(1);
 
     await message.reply(
-      `**Statistics for <@${TARGET_ID}>**\n` +
-      `Total voice time: **${voiceHours} hours** (${voiceSec} seconds)\n` +
-      `Time spent **${game}**: **${hours} hours** (${sec} seconds)`
+      `**Statistics for <@${message.author.id}>**\n` +
+      `Total voice time: **${voiceHours} hours** (${voiceSec} seconds)`
     );
   }
 
   if (command === 'gametime' && args.length > 0) {
     const game = args.join(' ');
     const key = `activity:${game}`;
-    const sec = getTotalSeconds(TARGET_ID, message.guild.id, key);
-    const hours = (sec / 3600).toFixed(1);
+    const sec = getTotalSeconds(message.author.id, message.guild.id, key);
+    const hours = (Number(sec) / 3600).toFixed(1);
 
     await message.reply(
       `Time spent **${game}**: **${hours} hours** (${sec} seconds)`
