@@ -10,18 +10,18 @@ model VoiceSession {
   id          String   @id @default(cuid())
   userId      String
   guildId     String
+  channel     String
   joinTime    BigInt
   leaveTime   BigInt?
-  duration    Int?     // seconds
+  duration    Int?     
   createdAt   DateTime @default(now())
 
-  @@index([userId, guildId])
+  @@index([userId, guildId, channel])
 }
 
 model ActivitySession {
   id           String   @id @default(cuid())
   userId       String
-  guildId      String
   activityName String
   activityType String
   startTime    BigInt
@@ -29,15 +29,16 @@ model ActivitySession {
   duration     Int?
   createdAt    DateTime @default(now())
 
-  @@index([userId, guildId, activityName])
+  @@index([userId, activityName])
 }
 
 model Total {
   id           String @id @default(cuid())
   userId       String
   guildId      String
-  type         String // "voice" or "activity:GameName"
+  type         String 
+  activity     String 
   totalSeconds Int    @default(0)
 
-  @@unique([userId, guildId, type])
+  @@unique([userId, guildId, type, activity])
 }
