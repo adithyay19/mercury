@@ -39,6 +39,7 @@ model Total {
   type         String 
   activity     String 
   totalSeconds Int    @default(0)
+  createdAt    DateTime @default(now())
 
   @@unique([userId, guildId, type, activity])
 }

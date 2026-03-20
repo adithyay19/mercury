@@ -7,11 +7,7 @@ import {
   VoiceState,
   TextChannel,
 } from "discord.js";
-import {
-  NewsChannel,
-  DMChannel,
-  ThreadChannel,
-} from "discord.js";
+import { NewsChannel, DMChannel, ThreadChannel } from "discord.js";
 import dotenv from "dotenv";
 import path from "node:path";
 import {
@@ -19,11 +15,8 @@ import {
   endVoiceSession,
   startActivitySession,
   endActivitySession,
-  getTotalSecondsPerServer,
-  getTotalSecondsPerActivity,
   prisma,
 } from "./database";
-import { GetTotalTime } from "./types";
 
 dotenv.config({ path: path.join(import.meta.dirname, "..", "secrets.env") });
 
@@ -40,9 +33,10 @@ const client = new Client({
 
 const TARGET_ID = process.env.TARGET_USER_ID!;
 const NOTIFY_CHANNEL_ID = process.env.NOTIFY_CHANNEL_ID!;
-const PREFIX = process.env.PREFIX || "!";
 
 const lastSeenActivities = new Map<string, string>();
+const cooldowns = new Map<string, number>();
+const COOLDOWN_MS = 5_000;
 
 client.once(Events.ClientReady, async () => {
   await prisma.$connect();
@@ -112,8 +106,6 @@ client.on(
     if (newPresence.userId != TARGET_ID) return;
 
     const userId = TARGET_ID;
-    const guildId = newPresence.guild.id;
-    const userTag = newPresence.user?.tag ?? "Unknown";
 
     const currentActivities = (newPresence.activities || [])
       .map((act) => ({
@@ -122,15 +114,12 @@ client.on(
         state: act.state ?? "",
         details: act.details ?? "",
       }))
-      .sort((a, b) => (a.name + a.type).localeCompare(b.name + b.type)); 
+      .sort((a, b) => (a.name + a.type).localeCompare(b.name + b.type));
 
     const currentSignature = JSON.stringify(currentActivities);
 
     const key = `${userId}`;
     const previousSignature = lastSeenActivities.get(key);
-
-    console.log(currentActivities, previousSignature);
-    console.log("\nServer: " + newPresence.guild.name + "\n");
 
     if (currentSignature === previousSignature) {
       return;
@@ -173,59 +162,61 @@ client.on(
   },
 );
 
-client.on(Events.MessageCreate, async (message) => {
-  if (
-    !message.content.startsWith(PREFIX) ||
-    message.author.bot ||
-    !message.guild
-  )
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const userId = interaction.user.id;
+  const now = Date.now();
+  const lastUsed = cooldowns.get(userId) ?? 0;
+
+  if (now - lastUsed < COOLDOWN_MS) {
+    const remaining = Math.ceil((lastUsed + COOLDOWN_MS - now) / 1000);
+    await interaction.reply({
+      content: `Please wait ${remaining} second(s) before using another command.`,
+      ephemeral: true,
+    });
     return;
+  }
 
-  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-  const command = args.shift()?.toLowerCase();
-  const activity = args.join(" ") ?? null;
+  cooldowns.set(userId, now);
 
-  if (command === "voice") {
-    let voiceSec;
+  const { commandName } = interaction;
 
-    if (!activity) {
-      voiceSec = getTotalSecondsPerServer(
-        message.author.id,
-        message.guild.id,
-        "voice",
-      );
+  try {
+    if (commandName === "game") {
+      const { game } = await import("./commands/game.js");
+      if (interaction.isAutocomplete()) {
+        await game.autocomplete(interaction);
+      } else {
+        await game.execute(interaction);
+      }
+    }
+
+    if (commandName === "voice") {
+      const { voice } = await import("./commands/voice.js");
+      if (interaction.isAutocomplete()) {
+        await voice.autocomplete(interaction);
+      } else {
+        await voice.execute(interaction);
+      }
+    }
+    if (commandName === "help") {
+      const { help } = await import("./commands/help.js");
+      await help.execute(interaction);
     } else {
-      voiceSec = getTotalSecondsPerActivity(
-        message.author.id,
-        message.guild.id,
-        "voice",
-        activity,
-      );
+      interaction.reply({
+        content: `There is not command /${commandName}.\nPlease use /help for the list of commands.`,
+        ephemeral: true,
+      });
     }
-
-    const voiceTime = GetTotalTime(Number(voiceSec));
-    await message.reply(
-      `Total voice time: **${voiceTime}** ${activity ? `in channel **${activity}**` : `in server **${message.guild.name}**`}`,
-    );
-  } else if (command === "game") {
-
-    if (message.author.id != TARGET_ID) {
-      await message.reply(`Your activities are not recorded.`);
+  } catch (error) {
+    console.error(error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "There was an error while executing this command.",
+        ephemeral: true,
+      });
     }
-
-    if(!activity) {
-      await message.reply(`Invalid command, user !help for .`);
-    }
-
-    const sec = getTotalSecondsPerActivity(
-      message.author.id,
-      `${-1}`,
-      "activity",
-      activity,
-    );
-    const totalTime = GetTotalTime(Number(sec));
-
-    await message.reply(`Time spent **${activity}**: **${totalTime}**`);
   }
 });
 

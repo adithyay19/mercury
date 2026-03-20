@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
 import path from "node:path";
 import fs from "node:fs";
+import { emptyStats, stats } from "./types";
 dotenv.config({ path: "./secrets.env" });
 
 const connectionString = process.env.DATABASE_URL;
@@ -13,7 +14,7 @@ if (!connectionString) {
 const adapter = new PrismaPg({
   connectionString,
   ssl: {
-    rejectUnauthorized: true, // Skip certificate hostname validation (common for self-signed or cloud-hosted DBs)
+    rejectUnauthorized: true, 
     ca: fs
       .readFileSync(path.join(process.cwd(), "./prod-ca-2021.crt"))
       .toString(),
@@ -76,10 +77,7 @@ export async function startActivitySession(
   });
 }
 
-export async function endActivitySession(
-  userId: string,
-  name: string,
-) {
+export async function endActivitySession(userId: string, name: string) {
   const session = await prisma.activitySession.findFirst({
     where: { userId, activityName: name, endTime: null },
     orderBy: { startTime: "desc" },
@@ -116,19 +114,20 @@ async function updateTotal(
 export async function getTotalSecondsPerServer(
   userId: string,
   guildId: string,
-  type: string,
-): Promise<number> {
+): Promise<stats> {
   const total = await prisma.total.findMany({
     where: { userId: userId, guildId: guildId, type: "voice" },
   });
 
-  let totalVoiceSeconds = 0;
+  let serverTotal = emptyStats;
 
   total.forEach((x) => {
-    totalVoiceSeconds += x.totalSeconds;
+    serverTotal.totalSeconds += x.totalSeconds;
+    serverTotal.createdAt =
+      serverTotal.createdAt > x.createdAt ? x.createdAt : serverTotal.createdAt;
   });
 
-  return totalVoiceSeconds ?? 0;
+  return serverTotal ?? emptyStats;
 }
 
 export async function getTotalSecondsPerActivity(
@@ -136,11 +135,26 @@ export async function getTotalSecondsPerActivity(
   guildId: string,
   type: string,
   activity: string,
-): Promise<number> {
+): Promise<stats> {
   const total = await prisma.total.findUnique({
     where: {
       userId_guildId_type_activity: { userId, guildId, type, activity },
     },
+    select: { totalSeconds: true, createdAt: true },
   });
-  return total?.totalSeconds ?? 0;
+  return total ?? emptyStats;
+}
+
+export async function getAllActivities(type: string): Promise<string[]> {
+  const activitiesList = await prisma.total.findMany({
+    where: { type: type },
+    distinct: ["activity"],
+    orderBy: { totalSeconds: "desc" },
+    select: { activity: true },
+    take: 5
+  });
+
+  const activities: string[] = activitiesList.map((x) => x.activity);
+
+  return activities ?? [];
 }
