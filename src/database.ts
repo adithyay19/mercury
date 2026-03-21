@@ -5,7 +5,10 @@ import path from "node:path";
 import fs from "node:fs";
 import { emptyStats, stats } from "./types.js";
 
-dotenv.config();
+const env = process.env.NODE_ENV || 'development';
+if (env !== 'production') {
+  dotenv.config();
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

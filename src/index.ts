@@ -19,7 +19,10 @@ import {
   DeleteGuildData,
 } from "./database.js";
 
-dotenv.config();
+const env = process.env.NODE_ENV || 'development';
+if (env !== 'production') {
+  dotenv.config();
+}
 
 const client = new Client({
   intents: [
