@@ -5,8 +5,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { emptyStats, stats } from "./types.js";
 
-const env = process.env.NODE_ENV || 'development';
-if (env !== 'production') {
+const env = process.env.NODE_ENV || "development";
+if (env !== "production") {
   dotenv.config();
 }
 
@@ -18,11 +18,7 @@ if (!connectionString) {
 const adapter = new PrismaPg({
   connectionString,
   ssl: {
-    rejectUnauthorized: true,
-    ca: fs
-      .readFileSync(path.join(process.cwd(), "./prod-ca-2021.crt"))
-      .toString(),
-    minVersion: "TLSv1.2",
+    rejectUnauthorized: false,
   },
 });
 
@@ -39,9 +35,13 @@ export async function startVoiceSession(
   guildId: string,
   channel: string,
 ) {
-  await prisma.voiceSession.create({
-    data: { userId, guildId, channel, joinTime: Date.now() },
-  });
+  try {
+    await prisma.voiceSession.create({
+      data: { userId, guildId, channel, joinTime: Date.now() },
+    });
+  } catch (error) {
+    console.error("Error in startVoiceSession", error);
+  }
 }
 
 export async function endVoiceSession(
@@ -49,21 +49,25 @@ export async function endVoiceSession(
   guildId: string,
   channel: string,
 ) {
-  const session = await prisma.voiceSession.findFirst({
-    where: { userId, guildId, channel, leaveTime: null },
-    orderBy: { joinTime: "desc" },
-  });
+  try {
+    const session = await prisma.voiceSession.findFirst({
+      where: { userId, guildId, channel, leaveTime: null },
+      orderBy: { joinTime: "desc" },
+    });
 
-  if (!session) return;
+    if (!session) return;
 
-  const duration = Math.floor((Date.now() - Number(session.joinTime)) / 1000);
+    const duration = Math.floor((Date.now() - Number(session.joinTime)) / 1000);
 
-  await prisma.voiceSession.update({
-    where: { id: session.id },
-    data: { leaveTime: Date.now(), duration },
-  });
+    await prisma.voiceSession.update({
+      where: { id: session.id },
+      data: { leaveTime: Date.now(), duration },
+    });
 
-  await updateTotal(userId, guildId, "voice", channel, duration);
+    await updateTotal(userId, guildId, "voice", channel, duration);
+  } catch (error) {
+    console.error("Error in endVoiceSession", error);
+  }
 }
 
 export async function startActivitySession(
@@ -71,32 +75,42 @@ export async function startActivitySession(
   name: string,
   type: string,
 ) {
-  await prisma.activitySession.create({
-    data: {
-      userId,
-      activityName: name,
-      activityType: type,
-      startTime: Date.now(),
-    },
-  });
+  try {
+    await prisma.activitySession.create({
+      data: {
+        userId,
+        activityName: name,
+        activityType: type,
+        startTime: Date.now(),
+      },
+    });
+  } catch (error) {
+    console.error("Error in startActivitySession", error);
+  }
 }
 
 export async function endActivitySession(userId: string, name: string) {
-  const session = await prisma.activitySession.findFirst({
-    where: { userId, activityName: name, endTime: null },
-    orderBy: { startTime: "desc" },
-  });
+  try {
+    const session = await prisma.activitySession.findFirst({
+      where: { userId, activityName: name, endTime: null },
+      orderBy: { startTime: "desc" },
+    });
 
-  if (!session) return;
+    if (!session) return;
 
-  const duration = Math.floor((Date.now() - Number(session.startTime)) / 1000);
+    const duration = Math.floor(
+      (Date.now() - Number(session.startTime)) / 1000,
+    );
 
-  await prisma.activitySession.update({
-    where: { id: session.id },
-    data: { endTime: Date.now(), duration },
-  });
+    await prisma.activitySession.update({
+      where: { id: session.id },
+      data: { endTime: Date.now(), duration },
+    });
 
-  await updateTotal(userId, `${-1}`, `activity`, name, duration);
+    await updateTotal(userId, `${-1}`, `activity`, name, duration);
+  } catch (error) {
+    console.error("Error in endActivitySession", error);
+  }
 }
 
 async function updateTotal(
@@ -106,32 +120,41 @@ async function updateTotal(
   activity: string,
   seconds: number,
 ) {
-  await prisma.total.upsert({
-    where: {
-      userId_guildId_type_activity: { userId, guildId, type, activity },
-    },
-    update: { totalSeconds: { increment: seconds } },
-    create: { userId, guildId, type, activity, totalSeconds: seconds },
-  });
+  try {
+    await prisma.total.upsert({
+      where: {
+        userId_guildId_type_activity: { userId, guildId, type, activity },
+      },
+      update: { totalSeconds: { increment: seconds } },
+      create: { userId, guildId, type, activity, totalSeconds: seconds },
+    });
+  } catch (error) {
+    console.error("Error in updateTotal", error);
+  }
 }
 
 export async function getTotalSecondsPerServer(
   userId: string,
   guildId: string,
 ): Promise<stats> {
-  const total = await prisma.total.findMany({
-    where: { userId: userId, guildId: guildId, type: "voice" },
-  });
+  try {
+    const total = await prisma.total.findMany({
+      where: { userId: userId, guildId: guildId, type: "voice" },
+    });
 
-  const serverTotal = total.reduce((s, x) => {
-    s.totalSeconds += x.totalSeconds;
-    if (s.createdAt > x.createdAt) {
-      s.createdAt = x.createdAt;
-    }
-    return s;
-  }, emptyStats());
+    const serverTotal = total.reduce((s, x) => {
+      s.totalSeconds += x.totalSeconds;
+      if (s.createdAt > x.createdAt) {
+        s.createdAt = x.createdAt;
+      }
+      return s;
+    }, emptyStats());
 
-  return serverTotal ?? emptyStats;
+    return serverTotal ?? emptyStats;
+  } catch (error) {
+    console.error("Error in getTotalSecondsPerServer", error);
+    return emptyStats();
+  }
 }
 
 export async function getTotalSecondsPerActivity(
@@ -140,41 +163,50 @@ export async function getTotalSecondsPerActivity(
   type: string,
   activity: string,
 ): Promise<stats> {
-  const total = await prisma.total.findUnique({
-    where: {
-      userId_guildId_type_activity: { userId, guildId, type, activity },
-    },
-    select: { totalSeconds: true, createdAt: true },
-  });
-  return total ?? emptyStats();
+  try {
+    const total = await prisma.total.findUnique({
+      where: {
+        userId_guildId_type_activity: { userId, guildId, type, activity },
+      },
+      select: { totalSeconds: true, createdAt: true },
+    });
+    return total ?? emptyStats();
+  } catch (error) {
+    console.error("Error in getTotalSecondsPerActivity", error);
+    return emptyStats();
+  }
 }
 
 export async function getAllActivities(
   type: string,
   guildId: string,
 ): Promise<string[]> {
-  const activitiesList = await prisma.total.findMany({
-    where: { type: type, guildId: guildId },
-    distinct: ["activity"],
-    orderBy: { totalSeconds: "desc" },
-    select: { activity: true },
-    take: 5,
-  });
+  try {
+    const activitiesList = await prisma.total.findMany({
+      where: { type: type, guildId: guildId },
+      distinct: ["activity"],
+      orderBy: { totalSeconds: "desc" },
+      select: { activity: true },
+      take: 5,
+    });
 
-  const activities: string[] = activitiesList.map((x) => x.activity);
-  return activities ?? [];
+    const activities: string[] = activitiesList.map((x) => x.activity);
+    return activities ?? [];
+  } catch (error) {
+    console.error("Error in getAllActivities", error);
+    return [];
+  }
 }
 
-export async function DeleteGuildData(guildId:string) : Promise<boolean> {
+export async function deleteGuildData(guildId: string): Promise<boolean> {
   try {
     await prisma.$transaction([
       prisma.voiceSession.deleteMany({ where: { guildId: guildId } }),
       prisma.total.deleteMany({ where: { guildId: guildId } }),
     ]);
     return true;
-  }
-  catch(error) {
-    console.error(error);
+  } catch (error) {
+    console.error("Error in deleteGuildData: ", error);
     return false;
   }
 }

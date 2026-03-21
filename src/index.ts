@@ -15,14 +15,16 @@ import {
   endVoiceSession,
   startActivitySession,
   endActivitySession,
+  deleteGuildData,
   prisma,
-  DeleteGuildData,
 } from "./database.js";
-import express from 'express';
+import express from "express";
 
-const env = process.env.NODE_ENV || 'development';
+console.log("Imports completed");
+
+const env = process.env.NODE_ENV || "development";
 console.log("Env: " + env);
-if (env !== 'production') {
+if (env !== "production") {
   dotenv.config();
 }
 
@@ -37,6 +39,8 @@ const client = new Client({
   ],
 });
 
+console.log("Client instance created");
+
 const TARGET_ID = process.env.TARGET_USER_ID!;
 const NOTIFY_CHANNEL_ID = process.env.NOTIFY_CHANNEL_ID!;
 
@@ -45,9 +49,13 @@ const cooldowns = new Map<string, number>();
 const COOLDOWN_MS = 5_000;
 
 client.once(Events.ClientReady, async () => {
-  console.log(`Logged in as ${client.user?.tag}`);
+  console.log(
+    `Logged in as ${client.user?.tag} at ${new Date().toISOString()}`,
+  );
   await prisma.$connect();
-  await sendNotification("Up and running!");
+  await sendNotification(
+    `Up and running!\nLogged in at :at ${new Date().toISOString()}`,
+  );
 });
 
 async function sendNotification(content: string): Promise<void> {
@@ -88,17 +96,21 @@ client.on(
   async (oldState: VoiceState, newState: VoiceState) => {
     if (!newState.guild || !newState.member) return;
 
-    const user = newState.member.user;
-    const guildId = newState.guild.id;
+    try {
+      const user = newState.member.user;
+      const guildId = newState.guild.id;
 
-    if (!oldState.channelId && newState.channelId) {
-      const channelName = newState.channel?.name ?? "unknown channel";
-      startVoiceSession(user.id, guildId, channelName);
-    }
+      if (!oldState.channelId && newState.channelId) {
+        const channelName = newState.channel?.name ?? "unknown channel";
+        startVoiceSession(user.id, guildId, channelName);
+      }
 
-    if (oldState.channelId && !newState.channelId) {
-      const channelName = oldState.channel?.name ?? "unknown channel";
-      endVoiceSession(user.id, guildId, channelName);
+      if (oldState.channelId && !newState.channelId) {
+        const channelName = oldState.channel?.name ?? "unknown channel";
+        endVoiceSession(user.id, guildId, channelName);
+      }
+    } catch (error) {
+      console.error("Error in VoiceStateUpdate: " + error);
     }
   },
 );
@@ -109,57 +121,61 @@ client.on(
     if (!newPresence.guild) return;
     if (newPresence.userId != TARGET_ID) return;
 
-    const userId = TARGET_ID;
+    try {
+      const userId = TARGET_ID;
 
-    const currentActivities = (newPresence.activities || [])
-      .map((act) => ({
-        name: act.name ?? "",
-        type: act.type,
-        state: act.state ?? "",
-        details: act.details ?? "",
-      }))
-      .sort((a, b) => (a.name + a.type).localeCompare(b.name + b.type));
+      const currentActivities = (newPresence.activities || [])
+        .map((act) => ({
+          name: act.name ?? "",
+          type: act.type,
+          state: act.state ?? "",
+          details: act.details ?? "",
+        }))
+        .sort((a, b) => (a.name + a.type).localeCompare(b.name + b.type));
 
-    const currentSignature = JSON.stringify(currentActivities);
+      const currentSignature = JSON.stringify(currentActivities);
 
-    const key = `${userId}`;
-    const previousSignature = lastSeenActivities.get(key);
+      const key = `${userId}`;
+      const previousSignature = lastSeenActivities.get(key);
 
-    if (currentSignature === previousSignature) {
-      return;
-    }
-
-    lastSeenActivities.set(key, currentSignature);
-
-    const oldActs = oldPresence?.activities ?? [];
-    const newActs = newPresence.activities ?? [];
-
-    for (const act of newActs) {
-      if (!act.name) continue;
-
-      const existsInOld = oldActs.some(
-        (o) => o.name === act.name && o.type === act.type,
-      );
-
-      if (!existsInOld) {
-        const name = act.name;
-        const typeStr = ActivityType[act.type] ?? "Custom";
-
-        startActivitySession(userId, name, typeStr);
+      if (currentSignature === previousSignature) {
+        return;
       }
-    }
 
-    for (const act of oldActs) {
-      if (!act.name) continue;
+      lastSeenActivities.set(key, currentSignature);
 
-      const existsInNew = newActs.some(
-        (n) => n.name === act.name && n.type === act.type,
-      );
+      const oldActs = oldPresence?.activities ?? [];
+      const newActs = newPresence.activities ?? [];
 
-      if (!existsInNew) {
-        const name = act.name;
-        endActivitySession(userId, name);
+      for (const act of newActs) {
+        if (!act.name) continue;
+
+        const existsInOld = oldActs.some(
+          (o) => o.name === act.name && o.type === act.type,
+        );
+
+        if (!existsInOld) {
+          const name = act.name;
+          const typeStr = ActivityType[act.type] ?? "Custom";
+
+          startActivitySession(userId, name, typeStr);
+        }
       }
+
+      for (const act of oldActs) {
+        if (!act.name) continue;
+
+        const existsInNew = newActs.some(
+          (n) => n.name === act.name && n.type === act.type,
+        );
+
+        if (!existsInNew) {
+          const name = act.name;
+          endActivitySession(userId, name);
+        }
+      }
+    } catch (error) {
+      console.error("Error in PresenceUpdate: " + error);
     }
   },
 );
@@ -234,24 +250,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.GuildDelete, async (guild) => {
-  const success = await DeleteGuildData(guild.id);
-  if (success) {
-    await sendNotification(
-      `Cleaned up all data for removed guild: ${guild.name} (${guild.id})`,
-    );
-  } else {
-    await sendNotification(`Cleanup failed for guild ${guild.id}`);
+  try {
+    const success = await deleteGuildData(guild.id);
+    if (success) {
+      await sendNotification(
+        `Cleaned up all data for removed guild: ${guild.name} (${guild.id})`,
+      );
+    } else {
+      await sendNotification(`Cleanup failed for guild ${guild.id}`);
+    }
+  } catch (error) {
+    console.error("Error in GuildDelete: ", error);
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+console.log(
+  "Attempting login... Token length:",
+  process.env.DISCORD_TOKEN?.length ?? "missing",
+);
+client.login(process.env.DISCORD_TOKEN).catch((err) => {
+  console.error("Login rejected:", err.message);
+  process.exit(1);
+});
 
 //#region Dummy Inbound port to deploy it as free we service
 
 const app = express();
 
-app.get('/health', (_req, res) => {
-  res.status(200).send('Bot is alive');
+app.get("/health", (_req, res) => {
+  res.status(200).send("Bot is alive");
 });
 
 const port = process.env.PORT || 3000;
