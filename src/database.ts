@@ -4,7 +4,8 @@ import dotenv from "dotenv";
 import path from "node:path";
 import fs from "node:fs";
 import { emptyStats, stats } from "./types.js";
-dotenv.config({ path: "./secrets.env" });
+
+dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -145,9 +146,9 @@ export async function getTotalSecondsPerActivity(
   return total ?? emptyStats;
 }
 
-export async function getAllActivities(type: string): Promise<string[]> {
+export async function getAllActivities(type: string, guildId: string): Promise<string[]> {
   const activitiesList = await prisma.total.findMany({
-    where: { type: type },
+    where: { type: type, guildId: guildId },
     distinct: ["activity"],
     orderBy: { totalSeconds: "desc" },
     select: { activity: true },
@@ -155,6 +156,5 @@ export async function getAllActivities(type: string): Promise<string[]> {
   });
 
   const activities: string[] = activitiesList.map((x) => x.activity);
-  console.log(activities)
   return activities ?? [];
 }

@@ -50,13 +50,19 @@ export const voice = {
       year: "numeric",
     });
 
-    await interaction.editReply(
-      `Total voice time: **${voiceTime}** ${channel ? `in channel **${channel}**` : `in server **${guild.name}**`} since ${createdDate}`,
-    );
+    if (total == emptyStats) {
+      await interaction.editReply(
+        `No data available for ${channel ? `channel **${channel}**` : `server **${guild.name}**`}`,
+      );
+    } else {
+      await interaction.editReply(
+        `Total voice time: **${voiceTime}** ${channel ? `in channel **${channel}**` : `in server **${guild.name}**`} since ${createdDate}`,
+      );
+    }
   },
   autocomplete: async (interaction: any) => {
     const focusedValue = interaction.options.getFocused();
-    const choices = await getAllActivities("voice");
+    const choices = await getAllActivities("voice", interaction.guildId);
 
     const filtered = choices.filter((choice) =>
       choice.toLowerCase().startsWith(focusedValue.toLowerCase()),

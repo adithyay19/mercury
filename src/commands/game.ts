@@ -1,12 +1,8 @@
 import { SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import { getTotalSecondsPerActivity, getAllActivities } from "../database.js";
-import dotenv from "dotenv";
-import path from "node:path";
 import { GetTotalTime } from "../types.js";
 
-
-dotenv.config({ path: path.join(import.meta.dirname, "..", "secrets.env") });
 
 const TARGET_ID = process.env.TARGET_USER_ID!;
 
@@ -46,22 +42,18 @@ export const game = {
       year: "numeric",
     });
 
-    console.log(`Time spent **${game}**: **${totalTime}** since ${createdDate}`)
-
     await interaction.editReply(
       `Time spent **${game}**: **${totalTime}** since ${createdDate}`,
     );
   },
   autocomplete: async (interaction: any) => {
     const focusedValue = interaction.options.getFocused();
-    console.log(focusedValue)
-    const choices = await getAllActivities("activity");
+    const choices = await getAllActivities("activity", "-1");
 
     const filtered = choices.filter((choice) =>
       choice.toLowerCase().startsWith(focusedValue.toLowerCase()),
     );
 
-    console.log(choices + "\n" + filtered)
     await interaction.respond(
       filtered.map((choice) => ({ name: choice, value: choice })),
     );

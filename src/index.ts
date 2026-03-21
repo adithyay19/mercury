@@ -9,17 +9,15 @@ import {
 } from "discord.js";
 import { NewsChannel, DMChannel, ThreadChannel } from "discord.js";
 import dotenv from "dotenv";
-import path from "node:path";
 import {
   startVoiceSession,
   endVoiceSession,
   startActivitySession,
   endActivitySession,
   prisma,
-  getAllActivities,
 } from "./database.js";
 
-dotenv.config({ path: path.join(import.meta.dirname, "..", "secrets.env") });
+dotenv.config();
 
 const client = new Client({
   intents: [
@@ -60,7 +58,6 @@ async function sendNotification(content: string): Promise<void> {
       return;
     }
 
-    // TypeScript now knows channel is TextBasedChannel
     if (
       channel instanceof TextChannel ||
       channel instanceof NewsChannel ||
@@ -86,13 +83,11 @@ client.on(
     const user = newState.member.user;
     const guildId = newState.guild.id;
 
-    // Joined a voice channel
     if (!oldState.channelId && newState.channelId) {
       const channelName = newState.channel?.name ?? "unknown channel";
       startVoiceSession(user.id, guildId, channelName);
     }
 
-    // Left a voice channel
     if (oldState.channelId && !newState.channelId) {
       const channelName = oldState.channel?.name ?? "unknown channel";
       endVoiceSession(user.id, guildId, channelName);
