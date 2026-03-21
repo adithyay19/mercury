@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import {
   getTotalSecondsPerActivity,
@@ -21,7 +21,7 @@ export const voice = {
     if (!interaction.guild) {
       await interaction.reply({
         content: "This command can only be used in a server.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -31,7 +31,7 @@ export const voice = {
     const userId = interaction.user.id;
     const guild = interaction.guild;
 
-    let total = emptyStats;
+    let total = emptyStats();
     if (!channel) {
       total = await getTotalSecondsPerServer(userId, guild.id);
     } else {
@@ -43,6 +43,13 @@ export const voice = {
       );
     }
 
+    if (total === emptyStats()) {
+      await interaction.editReply(
+        `No data available for ${channel ? `channel **${channel}**` : `server **${guild.name}**`}`,
+      );
+      return;
+    }
+
     const voiceTime = GetTotalTime(Number(total.totalSeconds));
     const createdDate = total.createdAt.toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -50,15 +57,9 @@ export const voice = {
       year: "numeric",
     });
 
-    if (total == emptyStats) {
-      await interaction.editReply(
-        `No data available for ${channel ? `channel **${channel}**` : `server **${guild.name}**`}`,
-      );
-    } else {
-      await interaction.editReply(
-        `Total voice time: **${voiceTime}** ${channel ? `in channel **${channel}**` : `in server **${guild.name}**`} since ${createdDate}`,
-      );
-    }
+    await interaction.editReply(
+      `Total voice time: **${voiceTime}** ${channel ? `in channel **${channel}**` : `in server **${guild.name}**`} since ${createdDate}`,
+    );
   },
   autocomplete: async (interaction: any) => {
     const focusedValue = interaction.options.getFocused();

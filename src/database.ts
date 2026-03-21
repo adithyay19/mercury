@@ -15,7 +15,7 @@ if (!connectionString) {
 const adapter = new PrismaPg({
   connectionString,
   ssl: {
-    rejectUnauthorized: true, 
+    rejectUnauthorized: true,
     ca: fs
       .readFileSync(path.join(process.cwd(), "./prod-ca-2021.crt"))
       .toString(),
@@ -120,13 +120,13 @@ export async function getTotalSecondsPerServer(
     where: { userId: userId, guildId: guildId, type: "voice" },
   });
 
-  let serverTotal = emptyStats;
-
-  total.forEach((x) => {
-    serverTotal.totalSeconds += x.totalSeconds;
-    serverTotal.createdAt =
-      serverTotal.createdAt > x.createdAt ? x.createdAt : serverTotal.createdAt;
-  });
+  const serverTotal = total.reduce((s, x) => {
+    s.totalSeconds += x.totalSeconds;
+    if (s.createdAt > x.createdAt) {
+      s.createdAt = x.createdAt;
+    }
+    return s;
+  }, emptyStats());
 
   return serverTotal ?? emptyStats;
 }
@@ -143,18 +143,34 @@ export async function getTotalSecondsPerActivity(
     },
     select: { totalSeconds: true, createdAt: true },
   });
-  return total ?? emptyStats;
+  return total ?? emptyStats();
 }
 
-export async function getAllActivities(type: string, guildId: string): Promise<string[]> {
+export async function getAllActivities(
+  type: string,
+  guildId: string,
+): Promise<string[]> {
   const activitiesList = await prisma.total.findMany({
     where: { type: type, guildId: guildId },
     distinct: ["activity"],
     orderBy: { totalSeconds: "desc" },
     select: { activity: true },
-    take: 5
+    take: 5,
   });
 
   const activities: string[] = activitiesList.map((x) => x.activity);
   return activities ?? [];
+}
+
+export async function DeleteGuildData(guildId:string) : Promise<boolean> {
+  try {
+    await prisma.$transaction([
+      prisma.voiceSession.deleteMany({ where: { guildId: guildId } }),
+      prisma.total.deleteMany({ where: { guildId: guildId } }),
+    ]);
+    return true;
+  }
+  catch(error) {
+    return false;
+  }
 }

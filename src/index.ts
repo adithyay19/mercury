@@ -6,6 +6,7 @@ import {
   Presence,
   VoiceState,
   TextChannel,
+  MessageFlags,
 } from "discord.js";
 import { NewsChannel, DMChannel, ThreadChannel } from "discord.js";
 import dotenv from "dotenv";
@@ -15,6 +16,7 @@ import {
   startActivitySession,
   endActivitySession,
   prisma,
+  DeleteGuildData,
 } from "./database.js";
 
 dotenv.config();
@@ -150,8 +152,6 @@ client.on(
 
       if (!existsInNew) {
         const name = act.name;
-        const typeStr = ActivityType[act.type] ?? "Custom";
-
         endActivitySession(userId, name);
       }
     }
@@ -186,7 +186,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const remaining = Math.ceil((lastUsed + COOLDOWN_MS - now) / 1000);
     await interaction.reply({
       content: `Please wait ${remaining} second(s) before using another command.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -212,7 +212,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (!interaction.replied && !interaction.deferred) {
         interaction.reply({
           content: `There is not a command /${commandName}.\nPlease use /help for the list of commands.`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
     }
@@ -221,24 +221,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content: "There was an error while executing this command.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }
 });
 
-// client.on(Events.GuildDelete, async (guild) => {
-//   try {
-//     await prisma.$transaction([
-//       prisma.voiceSession.deleteMany({ where: { guildId: guild.id } }),
-//       prisma.total.deleteMany({ where: { guildId: guild.id } }),
-//     ]);
-//     await sendNotification(
-//       `Cleaned up all data for removed guild: ${guild.name} (${guild.id})`,
-//     );
-//   } catch (err) {
-//     await sendNotification(`Cleanup failed for guild ${guild.id}: ${err}`);
-//   }
-// });
+client.on(Events.GuildDelete, async (guild) => {
+  const success = await DeleteGuildData(guild.id);
+  if (success) {
+    await sendNotification(
+      `Cleaned up all data for removed guild: ${guild.name} (${guild.id})`,
+    );
+  } else {
+    await sendNotification(`Cleanup failed for guild ${guild.id}`);
+  }
+});
 
 client.login(process.env.DISCORD_TOKEN);

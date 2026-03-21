@@ -3,9 +3,9 @@ export interface stats {
     createdAt: Date
 }
 
-export const emptyStats = { 
-    totalSeconds: 0,
-    createdAt: new Date()
+export function emptyStats() : stats { 
+    return {totalSeconds: 0,
+    createdAt: new Date()}
 }
 
 export function GetTotalTime(seconds: number) {

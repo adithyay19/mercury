@@ -1,8 +1,7 @@
-import { SlashCommandBuilder } from "discord.js";
+import { MessageFlags, SlashCommandBuilder } from "discord.js";
 import type { ChatInputCommandInteraction } from "discord.js";
 import { getTotalSecondsPerActivity, getAllActivities } from "../database.js";
 import { GetTotalTime } from "../types.js";
-
 
 const TARGET_ID = process.env.TARGET_USER_ID!;
 
@@ -21,7 +20,7 @@ export const game = {
     if (!interaction.guild) {
       await interaction.reply({
         content: "This command can only be used in a server.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
