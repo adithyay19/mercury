@@ -18,6 +18,7 @@ import {
   prisma,
   DeleteGuildData,
 } from "./database.js";
+import express from 'express';
 
 const env = process.env.NODE_ENV || 'development';
 console.log("Env: " + env);
@@ -244,3 +245,18 @@ client.on(Events.GuildDelete, async (guild) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
+//#region Dummy Inbound port to deploy it as free we service
+
+const app = express();
+
+app.get('/health', (_req, res) => {
+  res.status(200).send('Bot is alive');
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Dummy health server listening on port ${port}`);
+});
+
+//#endregion
