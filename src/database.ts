@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import dotenv from "dotenv";
 import path from "node:path";
 import fs from "node:fs";
-import { emptyStats, stats } from "./types";
+import { emptyStats, stats } from "./types.js";
 dotenv.config({ path: "./secrets.env" });
 
 const connectionString = process.env.DATABASE_URL;
@@ -155,6 +155,6 @@ export async function getAllActivities(type: string): Promise<string[]> {
   });
 
   const activities: string[] = activitiesList.map((x) => x.activity);
-
+  console.log(activities)
   return activities ?? [];
 }

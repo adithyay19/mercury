@@ -16,7 +16,8 @@ import {
   startActivitySession,
   endActivitySession,
   prisma,
-} from "./database";
+  getAllActivities,
+} from "./database.js";
 
 dotenv.config({ path: path.join(import.meta.dirname, "..", "secrets.env") });
 
@@ -163,6 +164,23 @@ client.on(
 );
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    const command = interaction.commandName;
+    try {
+      if (command === "game") {
+        const { game } = await import("./commands/game.js");
+        await game.autocomplete(interaction);
+      }
+
+      if (command === "voice") {
+        const { voice } = await import("./commands/voice.js");
+        await voice.autocomplete(interaction);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const userId = interaction.user.id;
@@ -180,34 +198,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   cooldowns.set(userId, now);
 
-  const { commandName } = interaction;
+  const commandName = interaction.commandName;
 
   try {
     if (commandName === "game") {
       const { game } = await import("./commands/game.js");
-      if (interaction.isAutocomplete()) {
-        await game.autocomplete(interaction);
-      } else {
-        await game.execute(interaction);
-      }
+      await game.execute(interaction);
     }
 
     if (commandName === "voice") {
       const { voice } = await import("./commands/voice.js");
-      if (interaction.isAutocomplete()) {
-        await voice.autocomplete(interaction);
-      } else {
-        await voice.execute(interaction);
-      }
+      await voice.execute(interaction);
     }
     if (commandName === "help") {
       const { help } = await import("./commands/help.js");
       await help.execute(interaction);
     } else {
-      interaction.reply({
-        content: `There is not command /${commandName}.\nPlease use /help for the list of commands.`,
-        ephemeral: true,
-      });
+      if (!interaction.replied && !interaction.deferred) {
+        interaction.reply({
+          content: `There is not a command /${commandName}.\nPlease use /help for the list of commands.`,
+          ephemeral: true,
+        });
+      }
     }
   } catch (error) {
     console.error(error);
@@ -219,5 +231,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
+
+// client.on(Events.GuildDelete, async (guild) => {
+//   try {
+//     await prisma.$transaction([
+//       prisma.voiceSession.deleteMany({ where: { guildId: guild.id } }),
+//       prisma.total.deleteMany({ where: { guildId: guild.id } }),
+//     ]);
+//     await sendNotification(
+//       `Cleaned up all data for removed guild: ${guild.name} (${guild.id})`,
+//     );
+//   } catch (err) {
+//     await sendNotification(`Cleanup failed for guild ${guild.id}: ${err}`);
+//   }
+// });
 
 client.login(process.env.DISCORD_TOKEN);

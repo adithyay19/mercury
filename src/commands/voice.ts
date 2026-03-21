@@ -4,8 +4,8 @@ import {
   getTotalSecondsPerActivity,
   getAllActivities,
   getTotalSecondsPerServer,
-} from "../database";
-import { emptyStats, GetTotalTime } from "../types";
+} from "../database.js";
+import { emptyStats, GetTotalTime } from "../types.js";
 
 export const voice = {
   data: new SlashCommandBuilder()

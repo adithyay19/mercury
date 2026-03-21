@@ -2,18 +2,14 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
 
-    "target": "esnext",
-    "module": "esnext",
+    "target": "es2022",
+    "module": "nodenext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    // File Layout
-    // "rootDir": "./src",
-    // "outDir": "./dist",
-
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
     "types": [],
@@ -44,7 +40,9 @@
     "verbatimModuleSyntax": false,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "moduleDetection": "force",
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -17,11 +17,11 @@ export function GetTotalTime(seconds: number) {
 
 export const commands = [
     {
-        name: "/voice",
+        name: "/voice [voice channel (if required)]",
         description: "Shows time spent on a specific channel or server."
     },
     {
-        name: "/game",
+        name: "/game [name of game]",
         description: "Shows time spent on a specific game or activity."
     },
 ];
