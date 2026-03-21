@@ -20,6 +20,7 @@ import {
 } from "./database.js";
 
 const env = process.env.NODE_ENV || 'development';
+console.log("Env: " + env);
 if (env !== 'production') {
   dotenv.config();
 }
@@ -43,6 +44,7 @@ const cooldowns = new Map<string, number>();
 const COOLDOWN_MS = 5_000;
 
 client.once(Events.ClientReady, async () => {
+  console.log(`Logged in as ${client.user?.tag}`);
   await prisma.$connect();
   await sendNotification("Up and running!");
 });

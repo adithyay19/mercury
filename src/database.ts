@@ -174,6 +174,7 @@ export async function DeleteGuildData(guildId:string) : Promise<boolean> {
     return true;
   }
   catch(error) {
+    console.error(error);
     return false;
   }
 }
